@@ -1,0 +1,240 @@
+---
+title: "Predicting Recent Nicotine Usage"
+author: "Ryan Yahnker"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Description
+
+The aim of this project is to predict whether an individual recently used nicotine (used within the past year) utilizing supervised learning techniques.
+
+The dataset used includes a total of 1885 observations on 32 variables. A detailed description of the data set can be found below. Each row of the data contains observations of the following demographic and personality trait predictors:
+
+* ID: number of record in original database. Used for reference only.
+* Age: Age of the participant
+* Gender: Gender of the participant (M/F)
+* Education: Level of education of the participant
+* Country: Country of current residence of the participant
+* Ethnicity: Ethnicity of the participant
+* Nscore: NEO-FFI-R Neuroticism (Ranging from 12 to 60)
+* Escore: NEO-FFI-R Extraversion (Ranging from 16 to 59)
+* Oscore: NEO-FFI-R Openness (Ranging from 24 to 60)
+* Ascore: NEO-FFI-R Agreeableness (Ranging from 12 to 60)
+* Cscore: NEO-FFI-R Conscientiousness (Ranging from 17 to 59)
+* Impulsive: Impulsiveness measured by BIS-11
+* SS: Sensation Seeking measured by ImpSS
+
+Participants of the study were also questioned concerning their use of 18 legal and illegal drugs (alcohol, amphetamines, amylnitrite, benzodiazepine, cannabis, chocolate, cocaine, caffeine, crack, ecstasy, heroin, ketamine, legal highs, LSD, methadone, mushrooms, nicotine and volatile substance abuse) and one fictitious drug (Semeron) which was introduced to identify over-claimers. Usage of these drugs were measured on the class system ranging from CL0=CL6 defined below. 
+
+* CL0 = “Never Used”
+* CL1 = “Used over a decade ago”
+* CL2 = “Used in last decade”
+* CL3 = “Used in last year”
+* CL4 = “Used in last month”
+* CL5 = “Used in last week”
+* CL6 = “Used in last day”.
+
+For this project we will only use the data for nicotine use and train predictive models based on an individuals demographic and personality traits. 
+
+# Techniques Demonstrated
+
+Data Processing and Feature Engineering, Decision Trees, Boosting Model, Random Forest Model with Bootstrap, Feature Importance Analysis, and Evaluation Metrics (confusion matrix, tpr, fpr)
+
+### Set Up
+
+```{r}
+#attach necessary packages
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(glmnet)
+  library(tree)
+  library(maptree)
+  library(randomForest)
+  library(gbm)
+  library(ROCR)
+  library(knitr)
+  library(dplyr)})
+
+#set seed for reproducability
+set.seed(123)
+```
+
+## Data Processing and Feature Engineering
+
+```{r}
+drugs_data <- read_csv("drug.csv",
+                       col_names=c('ID','Age','Gender','Education','Country',
+                                   'Ethnicity','Nscore','Escore','Oscore','Ascore',
+                                   'Cscore','Impulsive','SS','Alcohol','Amphet',
+                                   'Amyl','Benzos','Caff','Cannabis', 'Choc','Coke',
+                                   'Crack','Ecstasy','Heroin','Ketamine','Legalh',
+                                   'LSD','Meth','Mushrooms','Nicotine','Semer','VSA'))
+head(drugs_data)
+```
+
+### Feature Engineering
+
+```{r}
+#add new factor variable for recent nicotine use utilizing 
+drugs_data <- drugs_data %>%
+  mutate(
+    recent_nicotine_use = ifelse(Nicotine >= "CL3", "Yes", "No"),
+    recent_nicotine_use = as.factor(recent_nicotine_use)
+      ) 
+
+#check that the variable was added correctly
+drugs_data[, c("Nicotine", "recent_nicotine_use")]
+```
+
+### Data Processing and Splitting
+
+```{r}
+#drugs data subset
+drugs_sub <- drugs_data %>%
+  dplyr::select(Age:SS, recent_nicotine_use)
+
+#check subset
+head(drugs_sub)
+```
+
+```{r}
+#sample training and testing datasets
+drug_train <- sample(nrow(drugs_sub), 1000)
+train_data <- drugs_sub[drug_train, ]
+test_data <- drugs_sub[-drug_train,]
+```
+
+The size of our training dataset is `r nrow(train_data)`.
+
+The size of our testing dataset is `r nrow(test_data)`.
+
+## Decision Tree
+
+```{r}
+#fit a decision tree model
+drugs_tree_model <- tree(recent_nicotine_use ~ ., data=train_data)
+```
+
+```{r}
+#find best tree size with cross validation
+drugs_tree_cv <- cv.tree(drugs_tree_model, FUN=prune.misclass, K=5)
+drugs_tree_cv
+
+#store minimum CV test error rate and corresponding size
+min_error <- min(drugs_tree_cv$dev)
+best_size <- min(drugs_tree_cv$size[drugs_tree_cv$dev==min_error])
+```
+
+The best tree size obtained through cross validation is `r best_size`.
+
+```{r}
+#prune original tree to best size
+drugs_tree_model <- prune.misclass(drugs_tree_model, best=best_size)
+
+#plot pruned tree
+draw.tree(drugs_tree_model, cex=0.75, nodeinfo=T)
+title("Pruned Single Decision Tree", cex.main=0.85)
+```
+
+### Evaluation of Decision Tree
+
+```{r}
+#confusion matrix
+confusion_matrix <- table(Actual=test_data$recent_nicotine_use,
+      Predicted=predict(drugs_tree_model, test_data, type="class"))
+
+confusion_matrix
+
+#calculate FPR TPR
+true_pos <- confusion_matrix[2,2]
+false_pos <- confusion_matrix[1,2]
+true_neg <- confusion_matrix[1,1]
+false_neg <- confusion_matrix[2,1]
+
+tpr <- true_pos / (true_pos + false_neg)
+fpr <- false_pos / (false_pos + true_neg)
+
+tpr
+fpr
+```
+
+The TPR of the pruned single decision tree is `r tpr`.
+
+## Boosting Model
+
+```{r}
+#assign recent_nicotine_use to numeric {0,1}
+train_data$recent_nicotine_use <- as.numeric(train_data$recent_nicotine_use) - 1
+
+#fit boosting model
+drugs_boost_model <- gbm(recent_nicotine_use ~ ., data=train_data,
+                         distribution="bernoulli", n.trees=1000, shrinkage=0.01)
+
+summary(drugs_boost_model)
+```
+
+### Importance According to Boosting Model
+
+The predictors that appear to have the most importance according to the boosting model are in order SS, Age, Impulsive, and Ascore.
+
+## Random Forest Model
+
+```{r}
+#assign recent_nicotine_use to factor
+train_data$recent_nicotine_use <- as.factor(train_data$recent_nicotine_use)
+
+#fitting random forest model
+drugs_rf_model <- randomForest(recent_nicotine_use ~ ., data=train_data, importance=T)
+drugs_rf_model
+```
+
+The out-of-bag estimate of error is `28.2%`. The number of variables randomly considered at each split is `3`. `500` trees were fit into the data. 
+
+### Importance According to Random Forest Model. 
+
+```{r}
+#check variable importance
+importance(drugs_rf_model)
+```
+
+SS, Age, Impulsive, and Ascore are still important according to the random forest model, but they are not the most important. The most important predictors differs between the boosting and random forest model. 
+
+## Evaluation of Boosting model and Random Forest Model
+
+```{r}
+#predict probabilities
+boost_probabilities <- predict(drugs_boost_model, test_data, type = "response")
+rf_probabilities <- predict(drugs_rf_model, test_data, type="prob")
+
+#use prediction probabilities to assign binary class
+boost_class <- ifelse(boost_probabilities >= 0.2, "Yes", "No")
+rf_class <- ifelse(rf_probabilities[,2] >= 0.2, "Yes", "No")
+
+#make confusion matrices
+boost_cm <- table(Actual=test_data$recent_nicotine_use, Predicted=boost_class)
+rf_cm <- table(Actual=test_data$recent_nicotine_use, Predicted=rf_class)
+
+boost_cm
+rf_cm
+
+#compute TPR for each confusion matrix
+boost_tpr <- boost_cm[2, 2] / (boost_cm[2, 2] + boost_cm[2, 1])
+rf_tpr <- rf_cm[2, 2] / (rf_cm[2, 2] + rf_cm[2, 1])
+
+boost_tpr
+rf_tpr
+```
+
+## Conclusion
+
+Our boosting model True Positive Rate is `r boost_tpr`. This value is very high indicating that the boosting model is performing well, correctly predicting "Yes" for recent nicotine usage `98.36`% of the time. 
+
+Our random forest model True Positive Rate is `r rf_tpr`. This value is also very high indicating that the random forest model is performing well, correctly predicting "Yes" for recent nicotine usage `96.32`% of the time.
+
+Additionally the boosting and random forest model TPRs are much higher than the TPR of the pruned single decision tree.  
+
+
