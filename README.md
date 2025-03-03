@@ -46,7 +46,7 @@ For this project we will only use the data for nicotine use and train predictive
 
 ## Data Processing and Splitting
 
-![image](https://github.com/user-attachments/assets/5fde4ee9-d433-4107-98cd-14f576bc5810)
+![image](https://github.com/user-attachments/assets/fa85f204-7058-4794-9d93-eeff7bb9b07c)
 ![image](https://github.com/user-attachments/assets/6a59abdb-9190-413b-b90b-a91bbfdda853)
 
 The size of our training dataset is `1000`.
@@ -60,8 +60,10 @@ The size of our testing dataset is `885`.
 
 ## Evaluation of Decision Tree
 
-![image](https://github.com/user-attachments/assets/ba8eab6d-7477-46b9-bd47-e7d8297c0da4)
+![image](https://github.com/user-attachments/assets/d01aaee8-c95b-4214-997b-91f8091eddcd)
 ![image](https://github.com/user-attachments/assets/4b235c10-f6ee-41f9-ad8d-5b0422a82d2f)
+
+The TPR of the pruned single decision tree is `0.803681`.
 
 # Boosting Model
 
