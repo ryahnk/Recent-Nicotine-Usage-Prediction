@@ -100,5 +100,9 @@ Our random forest model True Positive Rate is `0.9631902`. This value is also ve
 
 Additionally the boosting and random forest model TPRs are much higher than the TPR of the pruned single decision tree.
 
+Although TPR is an important metric for evaluating model performance, further investigating FPR would be beneficial for better understanding the performance of our models. Fitting an ROC curve and calculating the area under the curve in addition to TPR and FPR would allow us to further interpret the models accuracy when classifying nicotine use. Furthermore, in this project we set our tuning parameter for our boosting model and random forest model to `0.2` which is a lower classification threshold, increasing the models True Positive Rate, but also False Positive Rate. This increased TPR could potentially lead to a false confidence in our models performance, further emphasizing the need to investigate FPR and/or evaluate model performance with larger classification thresholds. 
+
+Finally, an important note on the modeling of nicotine use in this project is the failure to use other drug use data. We build our model on soley demographic, personality trait, and nicotine use data of participants. We could potentially build a better model if we build more predictors based off other drug use data. For example if an individual has experimented with many drugs previously, they may be more likely to use nicotine. 
+
 
 
